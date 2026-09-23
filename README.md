@@ -1,15 +1,13 @@
 # A Ponte: A2A por fora, MCP por dentro
 
-Implementação do desafio de reserva de salas da Hill Valley Tech. Há dois
-processos separados: o servidor MCP em Streamable HTTP e o agente A2A, que se
-conecta a ele exclusivamente por HTTP. Não há LLM no caminho de execução.
+Implementação do desafio de reserva de salas da Hill Valley Tech. Há dois processos separados: o servidor MCP em Streamable HTTP e o agente A2A, que se conecta a ele exclusivamente por HTTP. Não há LLM no caminho de execução.
 
 ## Como rodar
 
 Pré-requisitos: Node.js 20+ e Python 3.10+.
 
 ```bash
-git clone <url-do-seu-fork>
+git clone https://github.com/leandrorwgit/desafio-a2a-com-mcp.git
 cd desafio-a2a-com-mcp
 npm install
 export REQUEST_STATE_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
@@ -33,34 +31,18 @@ Por fim, em um terceiro terminal, rode o validador:
 python3 validador/validar.py --agente http://localhost:7300 --mcp http://localhost:7301
 ```
 
-As portas padrão são 7300 para o agente e 7301 para o MCP. Elas podem ser
-alteradas por `AGENT_PORT`, `MCP_PORT` e `MCP_URL`.
+As portas padrão são 7300 para o agente e 7301 para o MCP. Elas podem ser alteradas por `AGENT_PORT`, `MCP_PORT` e `MCP_URL`.
 
 ## Onde a ponte acontece
 
-No agente, `applyMcp` em `agente/index.js` converte o retorno MCP
-`resultType: input_required` em `TASK_STATE_INPUT_REQUIRED`: extrai apenas a
-lista de alternativas para a mensagem pública e guarda o `requestState` em
-`pendingByTask`, um mapa privado indexado pelo id da Task. Na continuação de
-`sendMessage`, o agente recupera esse estado privado, cria um novo request id
-e reenvia `inputResponses` e o mesmo `requestState` ao `tools/call` MCP. O
-agente nunca interpreta o conteúdo do token.
+No agente, `applyMcp` em `agente/index.js` converte o retorno MCP `resultType: input_required` em `TASK_STATE_INPUT_REQUIRED`: extrai apenas a lista de alternativas para a mensagem pública e guarda o `requestState` em `pendingByTask`, um mapa privado indexado pelo id da Task. Na continuação de `sendMessage`, o agente recupera esse estado privado, cria um novo request id e reenvia `inputResponses` e o mesmo `requestState` ao `tools/call` MCP. O agente nunca interpreta o conteúdo do token.
 
 ## Decisões técnicas
 
-- O servidor usa `@modelcontextprotocol/server` 2.0.0 e seu
-  `createRequestStateCodec`, que sela o payload com HMAC-SHA256 e expira em
-  600 segundos. A chave vem exclusivamente de `REQUEST_STATE_SECRET` e deve
-  ter ao menos 32 bytes.
-- Reservas ficam somente em memória no processo MCP. O payload assinado
-  contém o pedido original e as alternativas, então um retry continua válido
-  após reiniciar o MCP, desde que a mesma chave de ambiente seja usada.
-- Tasks e seus históricos ficam em memória no agente. Os tokens MCP pendentes
-  ficam em `pendingByTask`, fora do objeto serializado pela API A2A, evitando
-  qualquer vazamento de `requestState`.
-- O agente faz `tools/list` e `resources/read` antes da primeira reserva; a
-  versão da política vem do resource, e o `traceparent` A2A é propagado ao
-  `_meta` de cada request MCP.
+- O servidor usa `@modelcontextprotocol/server` 2.0.0 e seu `createRequestStateCodec`, que sela o payload com HMAC-SHA256 e expira em 600 segundos. A chave vem exclusivamente de `REQUEST_STATE_SECRET` e deve ter ao menos 32 bytes.
+- Reservas ficam somente em memória no processo MCP. O payload assinado contém o pedido original e as alternativas, então um retry continua válido após reiniciar o MCP, desde que a mesma chave de ambiente seja usada.
+- Tasks e seus históricos ficam em memória no agente. Os tokens MCP pendentes ficam em `pendingByTask`, fora do objeto serializado pela API A2A, evitando qualquer vazamento de `requestState`.
+- O agente faz `tools/list` e `resources/read` antes da primeira reserva; a versão da política vem do resource, e o `traceparent` A2A é propagado ao `_meta` de cada request MCP.
 
 ## Saída do validador
 
@@ -88,6 +70,7 @@ PASS 17 requestState adulterado e rejeitado com -32602
 PASS 18 argumentos adulterados no retry nao tomam efeito
 PASS 19 recusa conclui sem reservar e sem isError
 PASS 20 conflito sem alternativa possivel devolve isError com a mensagem exata
+
 PASS 21 agent card responde no well-known com JSON
 PASS 22 o card declara a interface JSON-RPC com url e versao 1.0
 PASS 23 o card declara a skill reservar-sala
